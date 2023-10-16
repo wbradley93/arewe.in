@@ -2,7 +2,7 @@
 
 ## Concept
 
-A website that keeps track of official and live (accounting for in-progress games) standings for a variety of sports/leagues, with various playoff outcomes calculated based on each.
+A website that keeps track of official and live (accounting for in-progress games) standings for a variety of sports/leagues, with various playoff outcomes calculated based on each. Data is tracked and stored at the game level for easy real-time tracking and fast calculations of live standings, as well as (eventually) more granular predictive/data science-y coolness.
 
 ### User-facing calculations
 
@@ -24,13 +24,11 @@ A website that keeps track of official and live (accounting for in-progress game
 - Teams (conferences/divisions)
 - Playoff rules
 
-
 ### Team
 - Name
 - Statistics represented in standings, derived from Games
 - Currently playing (to look up for live standings/odds)
 - Data source ID
-
 
 ### Game
 - State
