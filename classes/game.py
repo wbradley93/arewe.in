@@ -11,6 +11,7 @@ class Game:
         self.home_score = home_score
         self.away_score = away_score
 
+    # TODO override in subclasses
     def update(self, status: str, home_score: int, away_score: int) -> None:
         self.status = status
         self.home_score = home_score

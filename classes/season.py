@@ -53,9 +53,7 @@ class Season:
     def get_standings_header(self, compact:bool):
         return self.standings_header_compact if compact else self.standings_header
 
-    def update_game(self, game_id: int, status: str, home_score: int = 0, away_score: int = 0) -> None:
-        self.games[game_id].update(status, home_score, away_score)
-
+    # TODO
     # remove stats from Team - should be running calcs over Games, maybe persisting them in Season?
     # - once a game is Final, it won't be changing - makes sense to persist official standings, validate them occasionally?
     # - then use this same code, but filter the official standings (will need to add conference/division to those objects)
@@ -73,6 +71,7 @@ class Season:
         return [t.standings_line() for t in sorted(standings_teams, key=self.standings_rules, reverse=True)]
 
     # use this for projections and also for live standings
+    # TODO override in subclasses
     def simulate_games(self, games: list[Game]) -> None:
         simulated_teams = deepcopy(self.teams)
         for game in games:
@@ -81,6 +80,7 @@ class Season:
         return simulated_teams
 
     def validate_standings(self) -> None:
+        # TODO
         pass
 
     def teams_json(self):
@@ -130,7 +130,7 @@ class NHLSeason(Season):
     @override
     def add_team(self, name: str, short_name: str, team_name: str, conference: Literal["Western", "Eastern"],
                  division: Literal['Central', 'Pacific', 'Metropolitan', 'Atlantic'], id: int = None) -> None:
-        # enforce division/conference relationships
+        # TODO enforce division/conference relationships
         id = len(self.teams) if id is None else id
         self.teams[id] = NHLTeam(name, short_name, team_name, conference, division)
 

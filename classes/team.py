@@ -12,6 +12,12 @@ class Team:
             'losses': 0
         }
 
+    def get_division(self) -> str:
+        return self.division
+
+    def get_conference(self) -> str:
+        return self.conference
+
     def update_stats(self, home_score: int, away_score: int) -> None:
         if home_score > away_score:
             self.stats['wins'] += 1
@@ -20,6 +26,10 @@ class Team:
 
     def reset_stats(self) -> None:
         self.stats = {stat: 0 for stat in self.stats.keys()}
+
+    def standings_line(self) -> list[int | float | str]:
+        # TODO
+        pass
 
 class NHLTeam(Team):
     def __init__(self, full_name: str, short_name: str, team_name: str, conference: Literal['Western', 'Eastern'],
@@ -86,7 +96,7 @@ class NHLTeam(Team):
     
     def standings_line(self) -> list[int | float | str]:
         diff = self.get_overall_goal_differential() if self.get_overall_goal_differential() < 1 else f"+{self.get_overall_goal_differential()}"
-        # consistency here vs redundancy in extra getters?
+        # TODO consistency here vs redundancy in extra getters?
         return [self.name, self.get_games_played(), self.get_win_count(), self.stats['regulation_losses'],
                 self.get_overtime_shootout_loss_count(), self.get_points(), self.get_points_percentage(), self.stats['overall_goals_for'],
                 self.stats['regulation_wins'], self.get_regulation_overtime_win_count(), self.stats['overall_goals_against'], diff]
@@ -159,7 +169,7 @@ class MLSTeam(Team):
     
     def standings_line(self) -> list[int | float | str]:
         diff = self.get_disciplinary_points() if self.get_disciplinary_points() < 1 else f"+{self.get_disciplinary_points()}"
-        # consistency here vs redundancy in extra getters?
+        # TODO consistency here vs redundancy in extra getters?
         return [self.name, self.get_points(), self.get_points_per_game(), self.get_games_played(),
                 self.get_win_count(), self.stats['losses'], self.stats['ties'], self.get_goals_for(),
                 self.get_goals_against(), diff]

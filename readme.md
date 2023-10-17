@@ -84,6 +84,7 @@ A website that keeps track of official and live (accounting for in-progress game
 2. Create Game/Team/Season objects, relationships to get from games to standings (done)
 3. Create methods to pull in real historical data (done)
 4. Create methods to pull in and parse live game data into official/live calculations
+   1. standardize game statuses (scheduled, live, final, postponed/suspended, etc)
 5. Create methods to persist game data (in progress)
    1. split standings off from team as separate object for cleaner de/serialization, simulation mechanics?
    2. dump separate lists of teams, games with ids placed inside?
