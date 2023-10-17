@@ -17,7 +17,7 @@ A website that keeps track of official and live (accounting for in-progress game
 
 ## Objects
 
-### League
+### Season
 - Standings rules (tiebreakers)
 - Some leagues use coin flips
 - Games (schedule/records)
@@ -80,13 +80,16 @@ A website that keeps track of official and live (accounting for in-progress game
 
 ## Gameplan
 
-1. Pick a league to start with (done; NHL)
-2. Create Game/Team/League objects, relationships to get from games to standings (done)
-3. Create methods to pull in real historical data (in progress)
+1. Pick a league or two to start with (done; NHL, MLS)
+2. Create Game/Team/Season objects, relationships to get from games to standings (done)
+3. Create methods to pull in real historical data (done)
 4. Create methods to pull in and parse live game data into official/live calculations
-5. Create methods to simulate unplayed games
-6. Create methods for additional probabilistic calculations listed above
-7. Create systems for polling of live games, intelligent handling of off-days, etc
-8. Create wrappers for league data sources
-9. Create test suite
-10. Create front-end
+5. Create methods to persist game data (in progress)
+   1. split standings off from team as separate object for cleaner de/serialization, simulation mechanics?
+   2. dump separate lists of teams, games with ids placed inside?
+6. Create methods to simulate unplayed games
+7. Create methods for additional probabilistic calculations listed above
+8. Create systems for polling of live games, intelligent handling of off-days, etc
+9.  Create wrappers for league data sources
+10. Create test suite
+11. Create front-end

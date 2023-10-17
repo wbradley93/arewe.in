@@ -1,8 +1,11 @@
 from classes.team import Team, MLSTeam, NHLTeam
 from classes.game import Game, MLSGame, NHLGame
+from utils.serializer import serializer
 from typing import Literal, Optional
 from typing_extensions import override
+from copy import deepcopy
 from datetime import datetime
+import json
 
 mls_standings_header: list[str] = ["Club", "Points", "Points Per Game", "Games Played", "Wins", "Losses", "Ties", "Goals For", 
                                    "Goals Against", "Goal Differential"]
@@ -36,10 +39,10 @@ def nhl_standings_rules(t: NHLTeam) -> tuple[int, ...]:
         t.get_overall_goals_for()                       # 8. Total number of goals scored (including goals awarded for shootout wins)
     )
 
-class League:
+class Season:
     def __init__(self, standings_header: list[str], standings_header_compact: list[str], standings_rules: tuple[int, ...]) -> None:
         self.teams: dict[int, Team] = {}
-        self.games: list[Game] = []
+        self.games: dict[int, Game] = {}
         self.standings_header = standings_header
         self.standings_header_compact = standings_header_compact
         self.standings_rules = standings_rules
@@ -47,16 +50,46 @@ class League:
     def add_team(self, name: str) -> None:
         self.teams[len(self.teams)] = Team(name)
 
-    # def add_game(self, home_id: int, away_id: int, start_datetime: datetime) -> None:
-    #     self.games.append(Game(home_id, away_id, start_datetime))
-
     def get_standings_header(self, compact:bool):
         return self.standings_header_compact if compact else self.standings_header
 
-    def standings(self):
-        return sorted(self.teams.values(), key=self.standings_rules, reverse=True)
+    def update_game(self, game_id: int, status: str, home_score: int = 0, away_score: int = 0) -> None:
+        self.games[game_id].update(status, home_score, away_score)
 
-class MLSLeague(League):
+    # remove stats from Team - should be running calcs over Games, maybe persisting them in Season?
+    # - once a game is Final, it won't be changing - makes sense to persist official standings, validate them occasionally?
+    # - then use this same code, but filter the official standings (will need to add conference/division to those objects)
+    # - then use simulate_games with deepcopy as shown
+    def standings(self, conference: str = None, division: str = None, live: bool = False):
+        teams = self.teams.values() if not live else self.simulate_games(filter(lambda g: g.status == "Live", self.games.values()))
+
+        if division is not None:
+            standings_teams = filter(lambda t: t.get_division() == division, teams)
+        elif conference is not None:
+            standings_teams = filter(lambda t: t.get_conference() == conference, teams)
+        else:
+            standings_teams = teams
+        
+        return [t.standings_line() for t in sorted(standings_teams, key=self.standings_rules, reverse=True)]
+
+    # use this for projections and also for live standings
+    def simulate_games(self, games: list[Game]) -> None:
+        simulated_teams = deepcopy(self.teams)
+        for game in games:
+            simulated_teams[game.home_id].update_stats(game.home_score, game.away_score)
+            simulated_teams[game.away_id].update_stats(game.away_score, game.home_score)
+        return simulated_teams
+
+    def validate_standings(self) -> None:
+        pass
+
+    def teams_json(self):
+        return json.dumps(self.teams, default=serializer, sort_keys=True)
+
+    def games_json(self):
+        return json.dumps(self.games, default=serializer, sort_keys=True)
+
+class MLSSeason(Season):
     @override
     def __init__(self) -> None:
         super().__init__(mls_standings_header, mls_standings_header_compact, mls_standings_rules)
@@ -65,17 +98,17 @@ class MLSLeague(League):
 
     @override
     def add_team(self, name: str, short_name: str, conference: Literal["Western", "Eastern"], id: int = None) -> None:
-        if id is None: id = len(self.teams)
+        id = len(self.teams) if id is None else id
         self.teams[id] = MLSTeam(name, short_name, conference)
 
     def add_game(self, game_id: int, home_id: int, away_id: int, start_datetime: datetime, status: str, home_score: int = 0, 
                  away_score: int = 0, home_disciplinary_points: int = 0, away_disciplinary_points: int = 0) -> None:
-        self.games[game_id] = MLSGame(game_id, home_id, away_id, start_datetime, status, home_score, away_score, 
+        self.games[game_id] = MLSGame(home_id, away_id, start_datetime, status, home_score, away_score,
                                       home_disciplinary_points, away_disciplinary_points)
 
     @override
-    def standings(self, conference: Literal["Western", "Eastern"]):
-        return sorted(filter(lambda t: t.get_conference() == conference, self.teams.values()), key=self.standings_rules, reverse=True)
+    def standings(self, conference: Optional[Literal["Western", "Eastern"]] = None):
+        return super().standings(conference)
     
     def update_official_stats(self):
         for team in self.teams.values():
@@ -87,7 +120,7 @@ class MLSLeague(League):
                 self.teams[game.away_id].update_stats(False, game.away_score, game.home_score, 0)
     
 
-class NHLLeague(League):
+class NHLSeason(Season):
     @override
     def __init__(self) -> None:
         super().__init__(nhl_standings_header, nhl_standings_header_compact, nhl_standings_rules)
@@ -97,23 +130,18 @@ class NHLLeague(League):
     @override
     def add_team(self, name: str, short_name: str, team_name: str, conference: Literal["Western", "Eastern"],
                  division: Literal['Central', 'Pacific', 'Metropolitan', 'Atlantic'], id: int = None) -> None:
-        if id is None: id = len(self.teams)
+        # enforce division/conference relationships
+        id = len(self.teams) if id is None else id
         self.teams[id] = NHLTeam(name, short_name, team_name, conference, division)
 
     def add_game(self, game_id: int, home_id: int, away_id: int, start_datetime: datetime, status: str, home_score: int = 0, 
                  away_score: int = 0, result_type: Literal["R", "OT", "SO"] = None) -> None:
-        self.games[game_id] = NHLGame(game_id, home_id, away_id, start_datetime, status, home_score, away_score, result_type)
+        self.games[game_id] = NHLGame(home_id, away_id, start_datetime, status, home_score, away_score, result_type)
 
     @override
-    def standings(self, standings_type: Literal["conference", "division"], conference: Optional[Literal["Western", "Eastern"]], 
-                             division: Optional[Literal['Central', 'Pacific', 'Metropolitan', 'Atlantic']]):
-        if standings_type == "conference" and conference is not None:
-            rows = sorted(filter(lambda t: t.get_conference() == conference, self.teams.values()), key=self.standings_rules, reverse=True)
-        elif standings_type == "division" and division is not None:
-            rows = sorted(filter(lambda t: t.get_division() == division, self.teams.values()), key=self.standings_rules, reverse=True)
-        else:
-            raise ValueError()
-        return rows
+    def standings(self, conference: Optional[Literal["Western", "Eastern"]] = None, 
+                  division: Optional[Literal['Central', 'Pacific', 'Metropolitan', 'Atlantic']] = None):
+        return super().standings(conference, division)
     
     def update_official_stats(self):
         for team in self.teams.values():
@@ -121,5 +149,5 @@ class NHLLeague(League):
 
         for game in self.games.values():
             if game.status == "Final":
-                self.teams[game.home_id].update_stats(game.home_score > game.away_score, game.result_type, game.home_score, game.away_score)
-                self.teams[game.away_id].update_stats(game.home_score < game.away_score, game.result_type, game.away_score, game.home_score)
+                self.teams[game.home_id].update_stats(game.home_score, game.away_score, game.result_type)
+                self.teams[game.away_id].update_stats(game.away_score, game.home_score, game.result_type)
