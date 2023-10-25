@@ -88,7 +88,7 @@ class NHLTeam(Team):
             if result_type == "R":
                 self.stats['regulation_losses'] += 1
             elif result_type == "OT":
-                self.stats['overtime_losse'] += 1
+                self.stats['overtime_losses'] += 1
             else:
                 self.stats['shootout_losses'] += 1
         self.stats['overall_goals_for'] += goals_for

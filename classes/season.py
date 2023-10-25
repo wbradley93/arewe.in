@@ -6,6 +6,7 @@ from typing_extensions import override
 from copy import deepcopy
 from datetime import datetime
 import json
+import requests
 
 mls_standings_header: list[str] = ["Club", "Points", "Points Per Game", "Games Played", "Wins", "Losses", "Ties", "Goals For", 
                                    "Goals Against", "Goal Differential"]
@@ -83,15 +84,12 @@ class Season:
         # TODO
         pass
 
-    def teams_json(self):
-        return json.dumps(self.teams, default=serializer, sort_keys=True)
-
-    def games_json(self):
-        return json.dumps(self.games, default=serializer, sort_keys=True)
+    def json(self):
+        return json.dumps({"teams": self.teams, "games": self.games}, default=serializer, sort_keys=True)
 
 class MLSSeason(Season):
     @override
-    def __init__(self) -> None:
+    def __init__(self, start_year: int) -> None:
         super().__init__(mls_standings_header, mls_standings_header_compact, mls_standings_rules)
         self.teams: dict[int, MLSTeam] = {}
         self.games: dict[int, MLSGame] = {}
@@ -122,20 +120,67 @@ class MLSSeason(Season):
 
 class NHLSeason(Season):
     @override
-    def __init__(self) -> None:
+    def __init__(self, start_year: int, import_json: Optional[dict[Literal["games", "teams"], dict[str, int | str | dict[str, int]]]] = None) -> None:
         super().__init__(nhl_standings_header, nhl_standings_header_compact, nhl_standings_rules)
         self.teams: dict[int, NHLTeam] = {}
         self.games: dict[int, NHLGame] = {}
+        self.status_mappings = {
+            "Preview": "Scheduled",
+            "Live": "Live",
+            "Final": "Final"
+        }
+
+        if import_json is not None:
+            for id, team in import_json["teams"].items():
+                self.add_team(team['name'], team['short_name'], team['team_name'], team['conference'], team['division'], id)
+            for id, game in import_json["games"].items():
+                self.add_game(id, game['home_id'], game['away_id'], datetime.fromisoformat(team['start_datetime']), game['status'], game['home_score'],
+                              game['away_score'], game['result_type'])
+            self.update_official_stats()
+        else:
+            # TODO push this down to Team object?
+            teams_params = { "season": f'{start_year}{start_year+1}' }
+            teams_url = "https://statsapi.web.nhl.com/api/v1/teams"
+            teams = requests.get(teams_url, params=teams_params, timeout=30).json()
+            for team in teams["teams"]:
+                self.add_team(team['name'], team['shortName'], team['franchise']['teamName'], team['conference']['name'], team['division']['name'], team['id'])
+
+            schedule_params = {
+                'startDate': f'{start_year}-01-01',        # YYYY-MM-DD
+                'endDate': f'{start_year+1}-12-31',        # Inclusive
+                'season': f'{start_year}{start_year+1}',   # Relevant season (format "20232024")
+                'hydrate': 'linescore',                    # Fields to pull; eg team, linescore, metadata, seriesSummary(series)
+                # 'teamId': '',                              #
+                'gameType': 'R'                            # "R" = Regular season; "P" = Playoffs
+            }
+            # TODO push this down to Game object?
+            schedule_url = "https://statsapi.web.nhl.com/api/v1/schedule"
+            games = requests.get(schedule_url, params=schedule_params, timeout=30).json()
+            for date in games['dates']:
+                for game in date['games']:
+                    result_type = "R" if game['linescore']['currentPeriod'] < 4 else game['linescore']['currentPeriodOrdinal']
+                    self.add_game(game['gamePk'], game['teams']['home']['team']['id'], game['teams']['away']['team']['id'],
+                                datetime.fromisoformat(game['gameDate']), self.status_mappings[game['status']['abstractGameState']],
+                                game['teams']['home']['score'], game['teams']['away']['score'], result_type)
+
+            for game in self.games.values():
+                if game.status == "Final":
+                    self.teams[game.home_id].update_stats(game.home_score, game.away_score, game.result_type)
+                    self.teams[game.away_id].update_stats(game.away_score, game.home_score, game.result_type)
 
     @override
     def add_team(self, name: str, short_name: str, team_name: str, conference: Literal["Western", "Eastern"],
                  division: Literal['Central', 'Pacific', 'Metropolitan', 'Atlantic'], id: int = None) -> None:
-        # TODO enforce division/conference relationships
+        if ((conference == "Western" and division not in ["Central", "Pacific"]) or
+            (conference == "Eastern" and division not in ["Metropolitan", "Atlantic"])):
+            # TODO flesh out error message
+            raise ValueError()
+
         id = len(self.teams) if id is None else id
         self.teams[id] = NHLTeam(name, short_name, team_name, conference, division)
 
-    def add_game(self, game_id: int, home_id: int, away_id: int, start_datetime: datetime, status: str, home_score: int = 0, 
-                 away_score: int = 0, result_type: Literal["R", "OT", "SO"] = None) -> None:
+    def add_game(self, game_id: int, home_id: int, away_id: int, start_datetime: datetime, status: str,
+                        home_score: int = 0, away_score: int = 0, result_type: Literal["R", "OT", "SO"] = None) -> None:
         self.games[game_id] = NHLGame(home_id, away_id, start_datetime, status, home_score, away_score, result_type)
 
     @override
@@ -143,6 +188,17 @@ class NHLSeason(Season):
                   division: Optional[Literal['Central', 'Pacific', 'Metropolitan', 'Atlantic']] = None):
         return super().standings(conference, division)
     
+    # TODO - update non-final games with starttime before now - for tracking live games
+    # - should be an .update() method on Game object?
+    # def update_official_results(self) -> None:
+    #     for (id, game) in filter(lambda k,g: g.status != "Final" and g.start < datetime.now(), self.games.items()):
+    #         # game_url = f"{id}"
+    #         # updated_game = requests.get(game_url, )
+    #         result_type = "R" if updated_game['linescore']['currentPeriod'] < 4 else updated_game['linescore']['currentPeriodOrdinal']
+    #         self.add_game(updated_game['gamePk'], updated_game['teams']['home']['team']['id'], updated_game['teams']['away']['team']['id'],
+    #                              datetime.fromisoformat(updated_game['gameDate']), self.status_mappings[updated_game['status']['abstractGameState']],
+    #                              updated_game['teams']['home']['score'], updated_game['teams']['away']['score'], result_type)
+
     def update_official_stats(self):
         for team in self.teams.values():
             team.reset_stats()

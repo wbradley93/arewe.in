@@ -83,12 +83,11 @@ A website that keeps track of official and live (accounting for in-progress game
 1. Pick a league or two to start with (done; NHL, MLS)
 2. Create Game/Team/Season objects, relationships to get from games to standings (done)
 3. Create methods to pull in real historical data (done)
-4. Create methods to pull in and parse live game data into official/live calculations
-   1. standardize game statuses (scheduled, live, final, postponed/suspended, etc)
-5. Create methods to persist game data (in progress)
-   1. split standings off from team as separate object for cleaner de/serialization, simulation mechanics?
-   2. dump separate lists of teams, games with ids placed inside?
-6. Create methods to simulate unplayed games
+4. Create methods to pull in and parse live game data into official/live calculations (in progress)
+   1. standardize game statuses (scheduled, live, final, postponed/suspended, etc) (NHL done, MLS todo)
+   2. NHL: how to handle tie games in live standings?
+5. Create methods to persist game data (done)
+6. Create methods to simulate unplayed games (in progress)
 7. Create methods for additional probabilistic calculations listed above
 8. Create systems for polling of live games, intelligent handling of off-days, etc
 9.  Create wrappers for league data sources
