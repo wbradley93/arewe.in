@@ -88,6 +88,7 @@ class Season:
         return json.dumps({"teams": self.teams, "games": self.games}, default=serializer, sort_keys=True)
 
 class MLSSeason(Season):
+    # TODO: are these overrides necessary?
     @override
     def __init__(self, start_year: int) -> None:
         super().__init__(mls_standings_header, mls_standings_header_compact, mls_standings_rules)
@@ -114,8 +115,8 @@ class MLSSeason(Season):
 
         for game in self.games.values():
             if game.status == "FullTime":
-                self.teams[game.home_id].update_stats(True, game.home_score, game.away_score, 0)
-                self.teams[game.away_id].update_stats(False, game.away_score, game.home_score, 0)
+                self.teams[game.home_id].update_stats(game.home_score, game.away_score, True, 0)
+                self.teams[game.away_id].update_stats(game.away_score, game.home_score, False, 0)
     
 
 class NHLSeason(Season):
@@ -159,14 +160,12 @@ class NHLSeason(Season):
             for date in games['dates']:
                 for game in date['games']:
                     result_type = "R" if game['linescore']['currentPeriod'] < 4 else game['linescore']['currentPeriodOrdinal']
+                    # TODO scheduled, in-progress games?
                     self.add_game(game['gamePk'], game['teams']['home']['team']['id'], game['teams']['away']['team']['id'],
                                 datetime.fromisoformat(game['gameDate']), self.status_mappings[game['status']['abstractGameState']],
                                 game['teams']['home']['score'], game['teams']['away']['score'], result_type)
 
-            for game in self.games.values():
-                if game.status == "Final":
-                    self.teams[game.home_id].update_stats(game.home_score, game.away_score, game.result_type)
-                    self.teams[game.away_id].update_stats(game.away_score, game.home_score, game.result_type)
+            self.update_official_stats(reset_stats = False)
 
     @override
     def add_team(self, name: str, short_name: str, team_name: str, conference: Literal["Western", "Eastern"],
@@ -199,9 +198,11 @@ class NHLSeason(Season):
     #                              datetime.fromisoformat(updated_game['gameDate']), self.status_mappings[updated_game['status']['abstractGameState']],
     #                              updated_game['teams']['home']['score'], updated_game['teams']['away']['score'], result_type)
 
-    def update_official_stats(self):
-        for team in self.teams.values():
-            team.reset_stats()
+    # TODO this can probably be promoted to Season?
+    def update_official_stats(self, reset_stats: bool = True):
+        if reset_stats:
+            for team in self.teams.values():
+                team.reset_stats()
 
         for game in self.games.values():
             if game.status == "Final":
